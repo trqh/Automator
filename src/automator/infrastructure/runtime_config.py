@@ -139,25 +139,49 @@ def save_runtime_settings(settings: RuntimeSettings) -> Path:
     return destination
 
 
-def probe_script_python(executable: Path, *, timeout: float = 5.0) -> str:
-    """Verify a user-selected external interpreter and return its Python version.
+def probe_script_python_timed(executable: Path, *, timeout: float = 30.0) -> tuple[str, float]:
+    """Return (version, seconds) from an external Python probe.
 
-    The selected executable is run with a harmless Python version command.
-    Do not call on an untrusted path. This does not install packages.
+    Preserve errors with timing, underlying exception detail, and stderr.
+    No environment mutation or global DLL path changes are performed.
     """
+    import time
+
     python = _absolute_path(executable, "script_python")
     if not python.is_file():
         raise RuntimeSettingsError(f"Python executable does not exist: {python}")
+    start = time.perf_counter()
     try:
         completed = subprocess.run(
             [str(python), "-c", "import sys; print('.'.join(map(str, sys.version_info[:3])))"],
             capture_output=True, text=True, timeout=timeout, check=False,
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
-        raise RuntimeSettingsError(f"Cannot launch script Python: {python}") from exc
+        elapsed = time.perf_counter() - start
+        raise RuntimeSettingsError(
+            f"Cannot launch script Python: {python}\n"
+            f"Error type: {type(exc).__name__}\n"
+            f"Elapsed: {elapsed:.3f}s; timeout: {timeout:.1f}s\n"
+            f"Details: {exc}"
+        ) from exc
+    elapsed = time.perf_counter() - start
     version = completed.stdout.strip()
-    if completed.returncode != 0 or not version or not all(p.isdigit() for p in version.split(".")) or len(version.split(".")) != 3:
-        raise RuntimeSettingsError(f"Selected executable is not a usable Python interpreter: {python}")
+    valid = (completed.returncode == 0 and len(version.split(".")) == 3
+             and all(p.isdigit() for p in version.split(".")))
+    if not valid:
+        stderr = (completed.stderr or "").strip()[:800]
+        raise RuntimeSettingsError(
+            f"Selected executable is not a usable Python interpreter: {python}\n"
+            f"Exit code: {completed.returncode}; elapsed: {elapsed:.3f}s\n"
+            f"Elapsed: {elapsed:.3f}s\n"
+            f"stderr: {stderr or '(empty)'}"
+        )
+    return version, elapsed
+
+
+def probe_script_python(executable: Path, *, timeout: float = 30.0) -> str:
+    """Backward-compatible version-only probe."""
+    version, _ = probe_script_python_timed(executable, timeout=timeout)
     return version
 
 

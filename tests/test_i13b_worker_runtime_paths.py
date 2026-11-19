@@ -30,6 +30,7 @@ def test_checkout_defaults_preserve_data_and_feature_locations(monkeypatch):
 
 def test_installed_module_never_writes_next_to_package(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg"))
+    monkeypatch.setenv("APPDATA", str(tmp_path / "appdata"))
     monkeypatch.delenv(DATA_ROOT_ENV, raising=False)
     monkeypatch.delenv(WORKSPACE_ENV, raising=False)
     site = tmp_path / "installed" / "site-packages" / "automator" / "workers" / "runner.py"

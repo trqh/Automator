@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 license = "MIT"
 readme = "README.md"
 name = "automator"
-version = "0.1.0"
+version = "0.1.1"
 description = "Cross-platform GUI for managing and executing Python features"
 requires-python = ">=3.10"
 dependencies = [
@@ -25,4 +25,4 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 "automator.templates" = ["feature_main.py", "script.config"]
-"automator.demo_scripts.feature_900001" = ["main.py", "script.config"]
+"automator.demo_scripts.feature_900003" = ["main.py", "script.config"]

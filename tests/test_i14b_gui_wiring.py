@@ -8,12 +8,26 @@ def _gui_tree():
     return ast.parse(gui_file.read_text(encoding="utf-8"))
 
 
-def test_gui_exposes_interpreter_and_demo_methods():
+def test_gui_exposes_interpreter_and_normal_sqlite_methods():
     tree = _gui_tree()
-    cls = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == "FeatureManagerGUI")
-    names = {n.name for n in cls.body if isinstance(n, ast.FunctionDef)}
-    assert {"_open_python_settings", "_run_bundled_demo", "_finish_bundled_demo"} <= names
-
+    cls = next(
+        n for n in tree.body
+        if isinstance(n, ast.ClassDef)
+        and n.name == "FeatureManagerGUI"
+    )
+    names = {
+        n.name for n in cls.body
+        if isinstance(n, ast.FunctionDef)
+    }
+    assert {
+        "_open_python_settings",
+        "_compare_selected_features",
+    } <= names
+    assert {
+        "_run_bundled_demo",
+        "_finish_bundled_demo",
+        "_run_sqlite_comparison_demo",
+    }.isdisjoint(names)
 
 def test_gui_uses_instance_settings_in_feature_runner():
     tree = _gui_tree()
@@ -26,9 +40,9 @@ def test_gui_uses_instance_settings_in_feature_runner():
         assert isinstance(runtime.value, ast.Name) and runtime.value.id == "self"
 
 
-def test_gui_demo_button_is_connected():
-    tree = _gui_tree()
-    sources = ast.unparse(tree)
-    assert "text='Run Demo'" in sources
-    assert "command=self._run_bundled_demo" in sources
+def test_gui_uses_real_feature_controls_without_obsolete_demo_controls():
+    sources = ast.unparse(_gui_tree())
     assert "text='Python Settings'" in sources
+    assert "label='Compare selected'" in sources
+    assert "text='Run Demo'" not in sources
+    assert "Run SQLite Comparison Demo" not in sources

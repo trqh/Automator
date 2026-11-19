@@ -13,7 +13,7 @@ from src.automator.services.first_run import FirstRunError, initialize_first_run
 def test_empty_install_creates_records_metadata_and_workspace(tmp_path):
     root = tmp_path / "new_install"
     result = initialize_first_run(RuntimeSettings(data_root=root))
-    assert json.loads(result.records_path.read_text(encoding="utf-8")) == []
+    assert [record["feature_number"] for record in json.loads(result.records_path.read_text(encoding="utf-8"))] == ["900003"]
     meta = json.loads(result.metadata_path.read_text(encoding="utf-8"))
     assert meta["records_version"] == 0
     assert meta["writer"] == "AutomatorFirstRun"

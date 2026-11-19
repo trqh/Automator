@@ -72,16 +72,14 @@ from ..infrastructure.runtime_config import RuntimeSettingsError
 
 from dataclasses import replace
 
-from ..services.demo_runner import run_offline_demo
 
 from ..infrastructure.runtime_config import (
     RuntimeSettingsError,
-    probe_script_python,
+    probe_script_python_timed,
     save_runtime_settings,
 )
 
 from ..infrastructure.canonical_paths import canonical_paths
-from ..services.comparison_demo import prepare_comparison_demo, accept_comparison_demo
 
 # ===================== PATH HELPERS =====================
 
@@ -1340,10 +1338,6 @@ class FeatureManagerGUI(tk.Tk):
         self.work_menu_button.pack(side=tk.LEFT, padx=5)
         self.sqlite_menu = tk.Menu(self, tearoff=False)
         self.sqlite_menu.add_command(label="Compare selected", command=self._compare_selected_features)
-        self.sqlite_menu.add_command(
-            label='Run SQLite Comparison Demo',
-            command=self._run_sqlite_comparison_demo,
-        )
         self.sqlite_menu_button = ttk.Menubutton(new_controls, text="SQLite", menu=self.sqlite_menu)
         self.sqlite_menu_button.pack(side=tk.LEFT, padx=5)
         self.column_visibility_vars = {}
@@ -1371,16 +1365,6 @@ class FeatureManagerGUI(tk.Tk):
             command=self._open_python_settings,
         )
         self.python_settings_button.pack(
-            side=tk.LEFT,
-            padx=5,
-        )
-
-        self.demo_button = ttk.Button(
-            new_controls,
-            text="Run Demo",
-            command=self._run_bundled_demo,
-        )
-        self.demo_button.pack(
             side=tk.LEFT,
             padx=5,
         )
@@ -4128,40 +4112,6 @@ class FeatureManagerGUI(tk.Tk):
     def _reload_clickup_sync_cache(self):
         self.clickup_sync_state = self.clickup_state.read()
 
-    def _run_sqlite_comparison_demo(self):
-        def prepared(demo, error):
-            if error:
-                messagebox.showerror('SQLite Comparison Demo', str(error), parent=self)
-                return
-            initial = demo.initial_result
-            prompt = (
-                    'Synthetic SQLite comparison: ' + initial.state + '\n\n'
-                    + (initial.message or '')
-                    + '\n\nAccept the synthetic candidate as the new canonical? '
-                      'This archives the previous synthetic canonical in the isolated demo folder.'
-            )
-            if not messagebox.askyesno('SQLite Comparison Demo', prompt, parent=self):
-                messagebox.showinfo('SQLite Comparison Demo',
-                                    'Candidate not accepted. Both SQLite files remain in:\n'
-                                    + str(demo.run_directory), parent=self)
-                return
-
-            def accepted(result, failure):
-                if failure:
-                    messagebox.showerror('SQLite Comparison Demo', str(failure), parent=self)
-                    return
-                messagebox.showinfo('SQLite Comparison Demo',
-                                    'Accepted. Repeat comparison: ' + result.state
-                                    + '\nHistory, canonical, and candidate saved to:\n'
-                                    + str(demo.run_directory), parent=self)
-
-            self._submit_work_job('Accept synthetic SQLite canonical',
-                                  lambda: accept_comparison_demo(demo), accepted)
-
-        self._submit_work_job('Prepare synthetic SQLite comparison',
-                              lambda: prepare_comparison_demo(RUNTIME_SETTINGS.data_root),
-                              prepared)
-
     def _compare_selected_features(self):
         if not self._require_daily_clickup_sync("Compare selected"):
             return
@@ -6292,7 +6242,7 @@ class FeatureManagerGUI(tk.Tk):
 
         threading.Thread(target=worker, daemon=True).start()
     def _open_python_settings(self):
-        """Set the external Python used for ordinary user features."""
+        """Validate a selected external Python without blocking Tk's event loop."""
         window = tk.Toplevel(self)
         window.title("Python Interpreter Settings")
         window.transient(self)
@@ -6301,198 +6251,114 @@ class FeatureManagerGUI(tk.Tk):
 
         frame = ttk.Frame(window, padding=16)
         frame.pack(fill=tk.BOTH, expand=True)
-
-        ttk.Label(
-            frame,
-            text="Python for your scripts (optional):",
-        ).pack(anchor=tk.W)
-
-        selected = tk.StringVar(
-            value=str(self.runtime_settings.script_python or "")
-        )
-
+        ttk.Label(frame, text="Python for your scripts (optional):").pack(anchor=tk.W)
+        selected = tk.StringVar(value=str(self.runtime_settings.script_python or ""))
         entry_row = ttk.Frame(frame)
         entry_row.pack(fill=tk.X, pady=8)
-
-        entry = ttk.Entry(
-            entry_row,
-            textvariable=selected,
-            width=65,
-        )
+        entry = ttk.Entry(entry_row, textvariable=selected, width=65)
         entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
         def browse():
             chosen = filedialog.askopenfilename(
-                parent=window,
-                title="Choose Python executable",
+                parent=window, title="Choose Python executable",
                 filetypes=[("All files", "*.*")],
             )
             if chosen:
                 selected.set(chosen)
 
-        ttk.Button(
-            entry_row,
-            text="Browse...",
-            command=browse,
-        ).pack(side=tk.LEFT, padx=(8, 0))
-
+        browse_button = ttk.Button(entry_row, text="Browse...", command=browse)
+        browse_button.pack(side=tk.LEFT, padx=(8, 0))
         ttk.Label(
             frame,
             text=(
-                "Bundled demonstrations work without an external "
-                "Python installation. Your own scripts use the "
-                "Python selected here."
+                "The built-in fictional example works with bundled Python. "
+                "Select an external Python for your own scripts."
             ),
             wraplength=480,
         ).pack(anchor=tk.W, pady=6)
-
-        def save_selection(clear=False):
-            raw = "" if clear else selected.get().strip()
-
-            try:
-                candidate = (
-                    Path(raw).expanduser().resolve()
-                    if raw else None
-                )
-
-                version = (
-                    probe_script_python(candidate)
-                    if candidate else None
-                )
-
-                updated = replace(
-                    self.runtime_settings,
-                    script_python=candidate,
-                )
-
-                destination = save_runtime_settings(updated)
-
-            except (RuntimeSettingsError, OSError, ValueError) as exc:
-                messagebox.showerror(
-                    "Python interpreter",
-                    str(exc),
-                    parent=window,
-                )
-                return
-
-            self.runtime_settings = updated
-
-            if candidate:
-                self._log(
-                    f"Selected script Python: {candidate} "
-                    f"(Python {version})"
-                )
-            else:
-                self._log(
-                    "External script Python selection cleared."
-                )
-
-            self._log(
-                f"Runtime settings saved: {destination}"
-            )
-
-            window.destroy()
-
+        status = tk.StringVar(value="")
+        ttk.Label(frame, textvariable=status, wraplength=480).pack(anchor=tk.W)
         buttons = ttk.Frame(frame)
         buttons.pack(fill=tk.X, pady=(10, 0))
+        busy = False
 
-        ttk.Button(
-            buttons,
-            text="Clear selection",
-            command=lambda: save_selection(True),
-        ).pack(side=tk.LEFT)
+        def set_busy(value):
+            nonlocal busy
+            busy = value
+            state = "disabled" if value else "normal"
+            entry.configure(state=state)
+            browse_button.configure(state=state)
+            clear_button.configure(state=state)
+            save_button.configure(state=state)
 
-        ttk.Button(
-            buttons,
-            text="Cancel",
-            command=window.destroy,
-        ).pack(side=tk.RIGHT, padx=5)
+        def finish_selection(candidate, version, elapsed, error):
+            if not window.winfo_exists():
+                return
+            set_busy(False)
+            if error is not None:
+                status.set("Interpreter validation failed")
+                messagebox.showerror("Python interpreter", str(error), parent=window)
+                return
+            updated = replace(self.runtime_settings, script_python=candidate)
+            try:
+                destination = save_runtime_settings(updated)
+            except (RuntimeSettingsError, OSError, ValueError) as exc:
+                messagebox.showerror("Python interpreter", str(exc), parent=window)
+                return
+            self.runtime_settings = updated
+            if candidate is not None:
+                self._log(
+                    f"Selected script Python: {candidate} "
+                    f"(Python {version}; probe {elapsed:.3f}s)"
+                )
+            else:
+                self._log("External script Python selection cleared.")
+            self._log(f"Runtime settings saved: {destination}")
+            window.destroy()
 
-        ttk.Button(
-            buttons,
-            text="Validate and Save",
-            command=save_selection,
-        ).pack(side=tk.RIGHT)
+        def save_selection(clear=False):
+            if busy:
+                return
+            raw = "" if clear else selected.get().strip()
+            try:
+                candidate = Path(raw).expanduser().resolve() if raw else None
+            except (OSError, ValueError) as exc:
+                messagebox.showerror("Python interpreter", str(exc), parent=window)
+                return
+            if candidate is None:
+                finish_selection(None, None, 0.0, None)
+                return
+            set_busy(True)
+            status.set("Validating Python interpreter (up to 30 seconds)...")
 
+            def probe_in_background():
+                try:
+                    version, elapsed = probe_script_python_timed(candidate)
+                    error = None
+                except (RuntimeSettingsError, OSError, ValueError) as exc:
+                    version, elapsed, error = None, None, exc
+                self._ui_post(finish_selection, candidate, version, elapsed, error)
+
+            threading.Thread(
+                target=probe_in_background,
+                daemon=True,
+                name="Automator-Python-Probe",
+            ).start()
+
+        clear_button = ttk.Button(
+            buttons, text="Clear selection", command=lambda: save_selection(True),
+        )
+        clear_button.pack(side=tk.LEFT)
+        ttk.Button(buttons, text="Cancel", command=window.destroy).pack(
+            side=tk.RIGHT, padx=5,
+        )
+        save_button = ttk.Button(
+            buttons, text="Validate and Save", command=save_selection,
+        )
+        save_button.pack(side=tk.RIGHT)
         entry.focus_set()
         window.protocol("WM_DELETE_WINDOW", window.destroy)
 
-    def _run_bundled_demo(self):
-        """Run packaged SQLite demo without changing user records."""
-        if not self._try_begin_busy("Demo"):
-            return
-
-        self._log("Starting offline SQLite demonstration...")
-        self._append_action_log("demo_started", {})
-
-        def worker():
-            try:
-                outcome = run_offline_demo(self.runtime_settings)
-                self._ui_post(
-                    self._finish_bundled_demo,
-                    outcome,
-                    None,
-                )
-            except Exception as exc:
-                self._ui_post(
-                    self._finish_bundled_demo,
-                    None,
-                    str(exc),
-                )
-
-        threading.Thread(
-            target=worker,
-            daemon=True,
-        ).start()
-
-    def _finish_bundled_demo(self, outcome, error):
-        self._clear_busy("Demo")
-
-        if error:
-            self._log(
-                f"Bundled demo failed: "
-                f"{redact_sensitive_text(error)}"
-            )
-
-            messagebox.showerror(
-                "Automator demonstration",
-                error,
-            )
-
-            self._append_action_log(
-                "demo_finished",
-                {"ok": False},
-            )
-            return
-
-        self._log(
-            f"Demonstration: {outcome.message}"
-        )
-
-        self._log(
-            f"Demo output: {outcome.output_database}"
-        )
-
-        self._append_action_log(
-            "demo_finished",
-            {
-                "ok": outcome.succeeded,
-                "run_directory": str(outcome.run_directory),
-            },
-        )
-
-        if outcome.succeeded:
-            messagebox.showinfo(
-                "Automator demonstration",
-                "Success! The packaged feature ran and produced "
-                "a SQLite database.\n\n"
-                f"Output: {outcome.output_database}",
-            )
-        else:
-            messagebox.showerror(
-                "Automator demonstration",
-                f"Demo failed: {outcome.message}",
-            )
 
     def _on_close(self):
         self._save_gui_state()

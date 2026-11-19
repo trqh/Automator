@@ -73,4 +73,4 @@ if ($LASTEXITCODE -ne 0) { throw 'Release finalization failed; do not publish.' 
 & $python (Join-Path $repo 'scripts\check_distribution.py') $out
 if ($LASTEXITCODE -ne 0) { throw 'Bundled runtime checks failed.' }
 Write-Host "I15C BUILD PASS: $out" -ForegroundColor Green
-Write-Host 'Do not publish yet: verify GUI and Run Demo in an isolated user-data location.'
+Write-Host 'Do not publish yet: test Feature 900003 end-to-end in a fresh isolated data directory, including SQLite comparison and history.'

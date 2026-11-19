@@ -18,6 +18,8 @@ from ..infrastructure.browser_utils import resolve_chromedriver_path
 
 import psutil  # pip install psutil
 from ..infrastructure.storage_paths import legacy_storage
+from ..infrastructure.bundled_runtime import runtime_python
+from ..services.trusted_example import is_trusted_example
 from ..infrastructure.runtime_config import (
     RuntimeSettings, resolve_feature_interpreter, worker_runtime_settings, worker_workspace,
 )
@@ -640,9 +642,19 @@ def _run_single_feature(
     if src_sqlite is not None:
         dest_sqlite = feature_dir / f"{feature}.sqlite"
         try:
-            shutil.copy2(src_sqlite, dest_sqlite)
-            sqlite_copied = True
-            msg = f"Completed successfully; sqlite copied from {src_sqlite.name} to {dest_sqlite.name}"
+            if src_sqlite.resolve() == dest_sqlite.resolve():
+                sqlite_copied = True
+                msg = (
+                    f"Completed successfully; sqlite already exists "
+                    f"at {dest_sqlite.name}"
+                )
+            else:
+                shutil.copy2(src_sqlite, dest_sqlite)
+                sqlite_copied = True
+                msg = (
+                    f"Completed successfully; sqlite copied from "
+                    f"{src_sqlite.name} to {dest_sqlite.name}"
+                )
         except Exception as e:
             msg = f"Completed successfully but failed to copy sqlite: {e}"
             return RunResult(
@@ -733,6 +745,14 @@ def run_features(
     # user scripts with a frozen Automator GUI executable.
     effective_settings = runtime_settings or RUNTIME_SETTINGS
     demo_ids = {str(item).strip() for item in (demo_features or ())}
+    # The feature number alone grants no privilege. Only either exact shipped
+    # example source (baseline or documented boolean toggle) is allowlisted.
+    trusted_ids = {feature_id for feature_id in features
+                   if is_trusted_example(feature_id, script_runs_dir)}
+    demo_ids.update(trusted_ids)
+    frozen_now = bool(getattr(sys, "frozen", False)) if frozen is None else frozen
+    if trusted_ids and effective_settings.script_python is None and frozen_now and bundled_python is None:
+        bundled_python = runtime_python(frozen=frozen_now)
     resolved_python = {}
     for feature_id in features:
         try:

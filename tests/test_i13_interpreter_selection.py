@@ -2,7 +2,6 @@
 from pathlib import Path
 import sys
 import sqlite3
-import shutil
 
 import pytest
 
@@ -43,29 +42,27 @@ def test_missing_bundled_interpreter_is_clear_error(tmp_path):
         )
 
 
-def test_demo_runs_end_to_end_with_no_configured_python(tmp_path):
-    demo_source = Path(__file__).resolve().parents[1] / (
-        "src/automator/demo_scripts/feature_900001/main.py"
-    )
-    workspace = tmp_path / "workspace"
-    target = workspace / "feature_900001"
-    target.mkdir(parents=True)
-    shutil.copy2(demo_source, target / "main.py")
+def test_frozen_example_runs_end_to_end_without_external_python(tmp_path):
+    from src.automator.services.first_run import initialize_first_run
+    from contextlib import closing
+
+    settings = RuntimeSettings(data_root=tmp_path)
+    setup = initialize_first_run(settings)
+    workspace = setup.workspace_path
     results = run_features(
-        features=["900001"], script_runs_dir=workspace, logs_dir=tmp_path / "logs",
-        runtime_settings=RuntimeSettings(data_root=tmp_path),
-        demo_features=["900001"], bundled_python=Path(sys.executable),
+        features=["900003"], script_runs_dir=workspace, logs_dir=tmp_path / "logs",
+        runtime_settings=settings, bundled_python=Path(sys.executable),
         frozen=True, max_workers=1,
     )
     assert len(results) == 1
     assert results[0].status == "success", results[0].message
-    with sqlite3.connect(target / "900001.sqlite") as con:
-        assert con.execute("SELECT label FROM demo").fetchone()[0] == "Automator demo completed"
+    with closing(sqlite3.connect(workspace / "feature_900003" / "900003.sqlite")) as con:
+        assert con.execute("SELECT COUNT(*) FROM person").fetchone()[0] == 3
 
 
-def test_bundled_demo_is_available_as_package_resource():
+def test_fictional_example_is_available_as_package_resource():
     from importlib.resources import files
     import json
-    demo = files("src.automator.demo_scripts.feature_900001")
+    demo = files("src.automator.demo_scripts.feature_900003")
     assert "sqlite3" in demo.joinpath("main.py").read_text(encoding="utf-8")
-    assert json.loads(demo.joinpath("script.config").read_text(encoding="utf-8"))["project_type"] == "Demo"
+    assert json.loads(demo.joinpath("script.config").read_text(encoding="utf-8"))["project_type"]

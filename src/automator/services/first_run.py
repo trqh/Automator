@@ -14,7 +14,7 @@ from pathlib import Path
 
 from ..infrastructure.runtime_config import RuntimeSettings, worker_workspace
 from ..infrastructure.canonical_paths import canonical_paths
-
+from .example_feature import EXAMPLE_RECORD, install_first_run_example
 
 class FirstRunError(RuntimeError):
     """A first-run directory or file could not be initialized safely."""
@@ -74,8 +74,6 @@ def initialize_first_run(settings: RuntimeSettings) -> FirstRunResult:
         if not data_dir.is_dir():
             raise FirstRunError(f"Application data directory is not a directory: {data_dir}")
 
-        if _create_json_exclusively(records, []):
-            created.append(records)
         if _create_json_exclusively(metadata, {
             "records_version": 0,
             "updated_at": datetime.now(timezone.utc).isoformat(),
@@ -96,6 +94,14 @@ def initialize_first_run(settings: RuntimeSettings) -> FirstRunResult:
                 created.append(directory)
             if not directory.is_dir():
                 raise FirstRunError(f"Canonical storage path is not a directory: {directory}")
+        if not records.exists():
+            example = install_first_run_example(workspace)
+            initial_records = [dict(EXAMPLE_RECORD)] if example is not None else []
+            if example is not None:
+                created.append(example)
+                created.extend((example / "main.py", example / "script.config"))
+            if _create_json_exclusively(records, initial_records):
+                created.append(records)
     except (OSError, ValueError, FirstRunError) as exc:
         raise FirstRunError(f"Cannot initialize Automator first-run storage: {exc}") from exc
 

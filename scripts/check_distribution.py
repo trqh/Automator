@@ -42,7 +42,7 @@ def main() -> None:
     }
     print(json.dumps({"distribution": str(root), "checks": checks}, indent=2))
     print("I15C bundled-runtime static verification: PASS")
-    print("NEXT: manually run Automator.exe and Run Demo with an isolated data directory.")
+    print("NEXT: use Automator.exe with a fresh isolated data root; run Feature 900003 and verify canonical SQLite workflow.")
 
 
 if __name__ == "__main__":

@@ -22,10 +22,10 @@ def test_packaged_resources_are_declared_and_present():
     meta = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     resources = meta["tool"]["setuptools"]["package-data"]
     assert {"feature_main.py", "script.config"} <= set(resources["automator.templates"])
-    assert {"main.py", "script.config"} <= set(resources["automator.demo_scripts.feature_900001"])
+    assert {"main.py", "script.config"} <= set(resources["automator.demo_scripts.feature_900003"])
     for package, names in (
         ("src.automator.templates", ("feature_main.py", "script.config")),
-        ("src.automator.demo_scripts.feature_900001", ("main.py", "script.config")),
+        ("src.automator.demo_scripts.feature_900003", ("main.py", "script.config")),
     ):
         for name in names:
             assert files(package).joinpath(name).is_file(), f"Missing resource: {package}/{name}"

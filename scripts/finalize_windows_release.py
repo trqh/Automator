@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Guarded, deterministic-ish post-build cleaner and ZIP packager for Automator v0.1.0.
+"""Guarded post-build cleaner and ZIP packager for Automator releases.
 
 Run on Windows after build_windows_release.ps1. No changes outside dist/Automator.
 The separate source tree and user-data directories are never modified.
@@ -80,7 +80,7 @@ def check_for_data(dist: Path) -> list[str]:
 
 def check_local_metadata(dist: Path) -> list[str]:
     return [p.relative_to(dist).as_posix() for p in dist.rglob('direct_url.json')
-            if p.is_file() and ('automator-0.1.0.dist-info' in str(p.parent))]
+            if p.is_file() and re.fullmatch(r'automator-[^/\\]+\.dist-info', p.parent.name, flags=re.IGNORECASE)]
 
 def find_licenses(repo: Path, dist: Path) -> tuple[list[tuple[str, Path]], list[str]]:
     items = [('Automator/LICENSE', repo / 'LICENSE'),

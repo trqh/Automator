@@ -1,7 +1,6 @@
 from pathlib import Path
 
 from src.automator.infrastructure.canonical_paths import canonical_paths
-from src.automator.services.comparison_demo import prepare_comparison_demo, accept_comparison_demo
 
 
 def test_portable_storage_root(tmp_path):
@@ -17,22 +16,6 @@ def test_development_storage_is_unchanged(tmp_path):
     assert paths.history == (app.parent / 'Canonical Output History').resolve()
 
 
-def test_comparison_demo_requires_acceptance(tmp_path):
-    demo = prepare_comparison_demo(tmp_path)
-    assert demo.initial_result.state == 'DIFFERENT'
-    assert demo.candidate.is_file() and demo.canonical.is_file()
-    assert not (demo.run_directory / 'Canonical Output History').exists()
-    result = accept_comparison_demo(demo)
-    assert result.state == 'SAME'
-    history_files = list((demo.run_directory / 'Canonical Output History' / '900002').glob('*.sqlite'))
-    assert len(history_files) == 1
-
-
-def test_second_demo_isolated(tmp_path):
-    first = prepare_comparison_demo(tmp_path)
-    second = prepare_comparison_demo(tmp_path)
-    assert first.run_directory != second.run_directory
-    assert first.canonical != second.canonical
 
 
 def test_same_day_approvals_preserve_every_version(tmp_path):
