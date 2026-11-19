@@ -1,0 +1,54 @@
+# Python environments, caches, builds, and package artifacts
+.venv/
+.venv-*/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+*.egg-info/
+build/
+dist/
+*.whl
+*.tar.gz
+*.spec
+
+# User data, runs, canonical outputs, and local configuration
+data/
+logs/
+demo_runs/
+Canonical Outputs/
+Canonical Output History/
+*.sqlite
+*.sqlite3
+*.sqlite-wal
+*.sqlite-shm
+records*.json
+records*.json.*
+gui_state.json
+runtime_settings.json
+clickup_last_run.json
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Internal audits, scratch artifacts, and temporary staging markers
+audit_2gh/
+migration_snapshots/
+I16A_STAGING_MANIFEST.json
+NOT_READY_FOR_PUBLICATION.txt
+*_AUDIT_REPORT.md
+*_live_report.json
+I16A_*.json
+I16E_*.json
+
+# Editors and OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
